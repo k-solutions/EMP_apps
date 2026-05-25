@@ -1,0 +1,155 @@
+openapi: 3.1.0
+info:
+  title: RSS Reader Service
+  version: 1.0.0
+  description: Asynchronous RSS/Atom feed parsing service with JWT authorization and Redis storage.
+paths:
+  /health:
+    get:
+      summary: Liveness and service mode check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  mode:
+                    type: string
+                    enum: [full, fallback]
+                    example: full
+
+  /parse:
+    post:
+      summary: Enqueue or parse a list of feed URLs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - urls
+              properties:
+                urls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  example: ["https://feeds.bbci.co.uk/news/rss.xml"]
+      responses:
+        '202':
+          description: Job accepted and enqueued (Full Mode)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    example: 01J3K12345
+        '200':
+          description: Synchronous parse completed successfully (Fallback Mode)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: Bad request (invalid JSON or missing fields)
+        '401':
+          description: Unauthorized (missing or invalid token)
+        '500':
+          description: Internal server error
+
+  /jobs/{id}:
+    get:
+      summary: Poll status and result of a parse job
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The generated ULID job ID
+          schema:
+            type: string
+            example: 01J3K12345
+      responses:
+        '200':
+          description: Job status and parsed items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Job not found
+        '500':
+          description: Internal server error
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RssItem:
+      type: object
+      properties:
+        title:
+          type: string
+        source:
+          type: string
+        source_url:
+          type: string
+          format: uri
+        link:
+          type: string
+          format: uri
+        publish_date:
+          type: string
+          format: date
+          example: "2026-05-24"
+        description:
+          type: string
+
+    URLErr:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        error:
+          type: string
+
+    Job:
+      type: object
+      properties:
+        job_id:
+          type: string
+          example: 01J3K12345
+        status:
+          type: string
+          enum: [pending, processing, done, failed]
+          example: done
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RssItem'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/URLErr'
+        error:
+          type: string
+          description: Global error message if the whole job failed
+          example: all URLs failed

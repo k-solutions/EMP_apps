@@ -1,4 +1,7 @@
 # flakes
 
+#keys
+*.pem
+
 # antigravity
 ./.antigravitycli/ 

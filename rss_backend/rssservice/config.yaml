@@ -1,0 +1,37 @@
+server:
+  port: 8080
+  read_timeout:  15s
+  write_timeout: 30s
+  idle_timeout:  60s
+
+redis:
+  dsn: "redis://localhost:6379/0"
+  job_ttl: 1h
+  cache_ttl_seconds: 3600      # 1-hour strict explicit TTL window for parsed URL cache entities
+  blocklist_prefix: "jwt:blocklist:"
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+  exchanges:
+    commands: "rss_commands"   # Direct exchange
+    results: "rss_results"     # Direct exchange
+    retry: "rss_commands_retry"
+  queues:
+    worker: "rss_commands_worker"
+    wait_30s: "rss_commands_wait_30s"
+    failed: "rss_commands_failed"
+  routing_keys:
+    commands_worker: "rss_commands_worker"
+    results_rails: "rss_results_rails"
+  consumer_tag: "rss-go-worker-1"
+  prefetch: 10
+
+jwt:
+  public_key_path: "./keys/ec_public.pem"  # ES256 public key
+
+rssreader:
+  concurrency_limit: 10
+  max_body_size:     10485760  # 10 MB
+
+log:
+  level: "info"   # debug | info | warn | error
