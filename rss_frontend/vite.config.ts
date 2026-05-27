@@ -7,4 +7,11 @@ export default defineConfig({
     RubyPlugin(),
     react(),
   ],
+  server: {
+    allowedHosts: true,
+    cors: true,
+  },
+  legacy: {
+    skipWebSocketTokenCheck: true,
+  },
 })

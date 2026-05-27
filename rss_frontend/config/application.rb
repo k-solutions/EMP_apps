@@ -24,7 +24,7 @@ module RssFrontend
     config.load_defaults 8.1
 
     # Set Solid Queue as the active job queue adapter
-    # config.active_job.queue_adapter = :solid_queue
+    config.active_job.queue_adapter = :solid_queue
 
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.

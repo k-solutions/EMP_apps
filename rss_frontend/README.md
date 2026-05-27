@@ -36,11 +36,7 @@ graph TD
 ## 2. Fixing "relation 'solid_queue_jobs' does not exist" Error
 
 > [!NOTE]
-> **Why this error happened:** 
-> In standard Rails 8 configurations, Puma or ActiveJob tries to connect to Solid Queue database tables on startup. Since our architecture completely bypasses ActiveJob, Sidekiq, and Solid Queue in favor of a direct RabbitMQ publisher and Sneakers, **Solid Queue has been entirely removed from the Gemfile and disabled in `config/application.rb`**. 
->
-> This isolates the database completely from Solid Queue, preventing any "relation 'solid_queue_jobs' does not exist" ActiveRecord statement invalid crashes.
-
+All Rails and React functionality must be coverd by test 
 ---
 
 ## 3. Environment Variables
@@ -80,22 +76,67 @@ env DATABASE_URL=postgres://postgres@localhost:5432/rss_frontend_development ./b
 npm install
 ```
 
-### Step 3: Start Development Servers
-Start both the Rails API server and the Vite asset dev server using the dev wrapper:
+### Step 3: Start Development Environment (Unified Foreman Workflow)
+You can start all Rails servers, Vite asset compilers, Sneakers ingestion workers, and Solid Queue background workers simultaneously using the unified dev wrapper (orchestrated via the `foreman` gem):
 ```bash
 bin/dev
 ```
+This single command automatically spins up and monitors:
+1. **Rails API Server** (Port `3000`)
+2. **Vite Asset Compiler** (Port `5173`)
+3. **Sneakers Result Ingestion Worker** (Event-driven queue subscriber)
+4. **Solid Queue Supervisor** (Background task executor and retry orchestrator)
+
 Open `http://localhost:3000` in your browser. Use the seed credentials `user@example.com` / `password` to log in.
 
-### Step 4: Start Sneakers Ingestion Worker
-To consume parsing results published by the Go worker to RabbitMQ in the background:
+---
+
+## 5. Running with Docker Compose (Multi-Container Stack)
+
+If you prefer to run the entire stack (Rails API, precompiled React SPA, Go `rss_service`, PostgreSQL, Redis, and RabbitMQ) in a single unified multi-container Docker environment, you can use the configured `docker-compose.yml` file.
+
+### Step 1: Build the Docker Images
+Compile the Docker images for all services (this will precompile the frontend React SPA assets inside the Rails production-optimized container):
 ```bash
-env DATABASE_URL=postgres://postgres@localhost:5432/rss_frontend_development ./bin/rails sneakers:run
+docker compose build
+```
+
+### Step 2: Database Initialization & Seeding inside Docker
+Run the ActiveRecord migrations and database seed command to initialize PostgreSQL and load the default login credentials and sample RSS items inside the active containers:
+```bash
+docker compose run --rm rails bundle exec rails db:prepare db:seed
+```
+
+### Step 3: Spin Up all Services
+Start all containers:
+```bash
+# Start all services in the foreground
+docker compose up
+
+# Or run in detached background mode
+docker compose up -d
+```
+This spins up and exposes:
+- **PostgreSQL (`db`)** on port `5432`
+- **Redis (`redis`)** on port `6379`
+- **RabbitMQ (`rabbitmq`)** on port `5672` (Management UI available on `http://localhost:15672`)
+- **Go RSS Parser Service (`rss_service`)** on port `8080`
+- **Rails API + React Server (`rails`)** on port `3000` (optimized production assets served statically)
+- **Sneakers AMQP Worker (`sneakers`)** consuming parsing results from the RabbitMQ pipeline
+
+Open `http://localhost:3000` in your browser and log in with the preloaded credentials:
+- **Email**: `user@example.com`
+- **Password**: `password`
+
+### Step 4: Tear Down
+To halt and remove all running containers, networks, and services:
+```bash
+docker compose down
 ```
 
 ---
 
-## 5. Running Automated Tests
+## 6. Running Automated Tests
 
 Run the complete RSpec unit, request, and model test suites:
 ```bash
@@ -104,5 +145,3 @@ env DATABASE_URL=postgres://postgres@localhost:5432/rss_frontend_test bundle exe
 
 All core unit and request tests should pass cleanly with **0 failures**.
 
-> [!IMPORTANT]
-> Headless Chrome is not installed natively in the FHS profile of `flake.nix`, meaning the Selenium-dependent browser automation specs (`spec/features/*`) cannot initialize a local Chrome Webdriver. However, the core Rails models, direct Bunny publishing requests, and Sneakers ActionCable broadcast jobs are fully tested and pass successfully.

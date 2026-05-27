@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # Silent Chrome DevTools .well-known routing noise
+  get "/.well-known/appspecific/*path", to: ->(env) { [404, { "Content-Type" => "application/json" }, ['{"error":"not_found"}']] }
+
   devise_for :users, path: "api/v1/users", controllers: { sessions: "api/v1/sessions" }
 
   namespace :api do

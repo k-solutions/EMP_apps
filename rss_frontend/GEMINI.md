@@ -171,6 +171,82 @@ rss_frontend/
 | `description` | text | |
 | `created_at` / `updated_at` | datetime | |
 
+
+[!NOTE]
+All Rails and React functionality must be covered by test
+
+---
+
+## Test Infrastructure & AsyncAPI RSpec Integration
+
+To ensure the published outputs and consumed packets conform strictly to the standard interface definition, RSpec handles programmatic JSON-Schema validations during integration phases via the `json-schema` gem.
+
+### Custom Contract Assertion Setup (`spec/support/asyncapi_validator.rb`)
+
+```ruby
+require 'json-schema'
+require 'yaml'
+
+RSpec::Matchers.define :comply_with_asyncapi_spec do |message_type|
+  match do |json_payload|
+    asyncapi_path = Rails.root.join('config', 'asyncapi.yaml')
+    spec = YAML.load_file(asyncapi_path)
+    
+    # Isolate payload schema definition target parameters from components list
+    raw_schema = spec.dig('components', 'messages', message_type.to_s, 'payload')
+    
+    raise "Target message blueprint type '#{message_type}' unmapped inside AsyncAPI spec" if raw_schema.nil?
+
+    # Target data parser initialization handles structural evaluation checks
+    payload_data = json_payload.is_a?(String) ? JSON.parse(json_payload) : json_payload
+    
+    @errors = JSON::Validator.fully_validate(raw_schema, payload_data)
+    @errors.empty?
+  end
+
+  failure_message do |json_payload|
+    "Expected target execution packet payload to correspond directly to AsyncAPI Contract criteria [#{message_type}]. Detected errors:
+#{@errors.join("
+")}"
+  end
+end
+```
+
+### Job Verification Implementation Example (`spec/jobs/publish_feed_job_spec.rb`)
+
+```ruby
+require 'rails_helper'
+
+RSpec.describe PublishFeedJob, type: :job do
+  fixtures :users
+
+  let(:feed_request) do
+    FeedRequest.create!(
+      user: users(:alice),
+      job_id: "01J3KPENDING0000000000000",
+      urls: ["https://feeds.bbci.co.uk/news/rss.xml"],
+      status: "pending",
+      mode: "full"
+    )
+  end
+
+  it "verifies that asynchronous message generation matches the command contract exactly" do
+    producer_mock = instance_double(RabbitMqProducer)
+    allow(RabbitMqProducer).to receive(:new).and_return(producer_mock)
+
+    captured_payload = nil
+    expect(producer_mock).to receive(:publish) do |args|
+      captured_payload = args[:payload]
+    end
+
+    PublishFeedJob.new.perform(feed_request.id)
+
+    # Programmatic contract assertion against config/asyncapi.yaml
+    expect(captured_payload).to comply_with_asyncapi_spec(:CommandMessage)
+  end
+end
+```
+
 ---
 
 ## Rails JSON API

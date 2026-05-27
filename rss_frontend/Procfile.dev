@@ -1,3 +1,4 @@
-
 vite: bin/vite dev
 web: bin/rails s
+sneakers: ./bin/rails sneakers:run
+solid_queue: ./bin/rails solid_queue:start

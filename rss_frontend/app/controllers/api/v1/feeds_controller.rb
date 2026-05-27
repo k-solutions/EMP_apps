@@ -15,25 +15,13 @@ class Api::V1::FeedsController < Api::BaseController
       status: "pending"
     )
 
-    publisher = RabbitmqPublisher.new
-    begin
-      publisher.publish(
-        routing_key: "rss.commands.#{job_id}",
-        payload:     { job_id: job_id, urls: urls }.to_json
-      )
-      feed_request.update!(status: "processing")
+    PublishFeedJob.perform_later(feed_request)
 
-      render json: {
-        feed_request_id: feed_request.id,
-        job_id: job_id,
-        status: "processing",
-        mode: "full"
-      }, status: :accepted
-    rescue => e
-      feed_request.destroy
-      render json: { error: "Failed to publish command: #{e.message}" }, status: :internal_server_error
-    ensure
-      publisher.close
-    end
+    render json: {
+      feed_request_id: feed_request.id,
+      job_id: job_id,
+      status: "pending",
+      mode: "full"
+    }, status: :accepted
   end
 end

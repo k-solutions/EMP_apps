@@ -1,11 +1,11 @@
 class ProcessFeedResultJob
   include Sneakers::Worker
 
-  from_queue "rss.results",
-    exchange:      "rss",
-    exchange_type: :topic,
-    routing_key:   "rss.results.*",
-    durable:       false,        # transient queue
+  from_queue "rss_results_rails",
+    exchange:      "rss_results",
+    exchange_type: :direct,
+    routing_key:   "rss_results_rails",
+    durable:       true,
     ack:           :manual
 
   def work(payload)

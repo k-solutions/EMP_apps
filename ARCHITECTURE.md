@@ -30,20 +30,18 @@ on the Rails frontend for persistent application data storage.
 The system utilizes Direct Exchanges to ensure predictable routing and performance.
 
 ### Full Mode Path
-1. **Rails Producer:** Generates a ULID (`job_id`) and publishes a JSON payload to the `rss_commands` (Direct) exchange using the Bunny gem.
-2. **Go Consumer:** Listens on the `rss_commands_worker` queue. Upon receipt, it checks the Redis cache for fresh, pre-parsed URL results
- before initiating direct network parsing via the `rssreader` package.
-3. **State & Cache Update:** The Go worker updates the `job:<id>` status in Redis to `processing` or `done` and saves valid parsing
- structures into the Redis URL cache with an explicit TTL.
-4. **Go Producer:** Publishes the JSON results to the `rss_results` (Direct) exchange.
-5. **Sneakers Consumer:** A Rails-side Sneakers worker consumes from `rss_results_rails`, persists the finalized items into PostgreSQL, 
-and broadcasts a lightweight cache synchronization hook via ActionCable.
+1. **Rails Producer:** Generates a ULID (`job_id`), creates a `FeedRequest` in PostgreSQL with a `pending` status, and enqueues `PublishFeedJob` asynchronously (utilizing Solid Queue).
+2. **Background Publisher:** `PublishFeedJob` executes, publishing a JSON payload (containing the `job_id` and URLs) to the `rss_commands` (Direct) exchange using the Bunny gem with `routing_key: rss_commands_worker` and `persistent: true` to ensure durability. Upon success, it updates the `FeedRequest` status to `processing`.
+3. **Go Consumer:** Listens on the `rss_commands_worker` queue. Upon receipt, it checks the Redis cache for fresh, pre-parsed URL results before initiating direct network parsing via the `rssreader` package.
+4. **State & Cache Update:** The Go worker updates the `job:<id>` status in Redis to `processing` or `done` and saves valid parsing structures into the Redis URL cache with an explicit TTL.
+5. **Go Producer:** Publishes the JSON results to the `rss_results` (Direct) exchange with `routing_key: rss_results_rails` and `persistent: true`.
+6. **Sneakers Consumer:** A Rails-side Sneakers worker (`ProcessFeedResultJob`) consumes from the `rss_results_rails` queue, persists the finalized items into PostgreSQL, updates the request status to `done` or `failed`, and broadcasts the results to the client via ActionCable hooks.
 
 ### Fallback Mode Path
-1. **Detection:** Bypasses explicit pre-flight pings; catches inline infrastructure errors during active service operations.
-2. **Direct Invocation:** Upon a runtime exception from the bus, `PublishFeedJob` bypasses the queue and calls the Go `POST /parse` endpoint directly using an ES256 JWT.
-3. **Synchronous Return:** The Go service safely parses the feeds (respecting the Redis cache layer if available) and returns the payload inline.
-4. **Persistence:** Rails saves the results directly to its PostgreSQL layer, bypassing the messaging layer entirely.
+1. **Detection:** Bypasses explicit pre-flight pings; catches inline Bunny connection/channel infrastructure errors inside `PublishFeedJob` during active service operations.
+2. **Direct Invocation:** Upon a runtime exception from the bus, `PublishFeedJob` bypasses the queue, dynamically generates a cryptographically secure ES256 JWT, and calls the Go `POST /parse` endpoint directly.
+3. **Synchronous Return:** The Go service safely parses the feeds (respecting the Redis cache layer if available) and returns the payload inline with `200 OK`.
+4. **Persistence & Broadcast:** Rails saves the returned results directly to PostgreSQL, updates the `FeedRequest` status to `done`/`failed`, and broadcasts the items via ActionCable, bypassing the RabbitMQ messaging layer entirely.
 
 ---
 

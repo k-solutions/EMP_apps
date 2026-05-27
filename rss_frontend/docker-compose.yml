@@ -23,7 +23,7 @@ services:
 
   rss_service:
     build:
-      context: ../rssservice
+      context: ../rss_backend/
       dockerfile: Dockerfile
     environment:
       REDIS_DSN:           redis://redis:6379/0
@@ -39,6 +39,7 @@ services:
       DATABASE_URL:    postgres://postgres:password@db/rss_frontend
       REDIS_URL:       redis://redis:6379/0
       RABBITMQ_URL:    amqp://guest:guest@rabbitmq:5672/
+      SECRET_KEY_BASE: dummy_secret_key_for_testing_purposes_only
     ports: ["3000:3000"]
     depends_on: [db, redis, rabbitmq, rss_service]
 
@@ -49,6 +50,7 @@ services:
       DATABASE_URL: postgres://postgres:password@db/rss_frontend
       REDIS_URL:    redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      SECRET_KEY_BASE: dummy_secret_key_for_testing_purposes_only
     depends_on: [db, redis, rabbitmq]
 
 volumes:

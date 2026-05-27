@@ -24,6 +24,22 @@ RSpec.describe ProcessFeedResultJob, type: :job do
     }.to_json
   end
 
+  describe "Sneakers Configuration" do
+    it "verifies queue and exchange configurations are direct and durable" do
+      opts = ProcessFeedResultJob.queue_opts
+      expect(ProcessFeedResultJob.queue_name).to eq("rss_results_rails")
+      expect(opts[:exchange]).to eq("rss_results")
+      expect(opts[:exchange_type]).to eq(:direct)
+      expect(opts[:durable]).to be(true)
+    end
+  end
+
+  describe "Contract Conformance" do
+    it "verifies that the inbound message complies with the ResultMessage contract schema" do
+      expect(payload).to comply_with_asyncapi_spec(:ResultMessage)
+    end
+  end
+
   describe "#work" do
     it "processes the result, saves feed items, updates request status and sends ActionCable broadcast" do
       expect(ActionCable.server).to receive(:broadcast).with(
@@ -42,7 +58,7 @@ RSpec.describe ProcessFeedResultJob, type: :job do
     end
 
     it "acks and ignores if job_id is unknown" do
-      unknown_payload = { job_id: "unknown_job_123", status: "done", items: [] }.to_json
+      unknown_payload = { job_id: "unknown_job_123", status: "done", items: [], errors: [] }.to_json
       res = worker.work(unknown_payload)
       expect(res).to eq(:ack)
     end
