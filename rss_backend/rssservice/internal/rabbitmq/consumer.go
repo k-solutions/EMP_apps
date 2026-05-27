@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/emarchant/rssservice/internal/config"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -36,9 +37,14 @@ func (c *Consumer) Start(ctx context.Context, handler func(ctx context.Context, 
 		return fmt.Errorf("failed to get channel for consuming: %w", err)
 	}
 
+	tag := c.cfg.RabbitMQ.ConsumerTag
+	if tag != "" {
+		tag = fmt.Sprintf("%s-%d", tag, time.Now().UnixNano())
+	}
+
 	deliveries, err := ch.Consume(
 		c.cfg.RabbitMQ.Queues.Worker,
-		c.cfg.RabbitMQ.ConsumerTag,
+		tag,
 		false, // autoAck = false
 		false, // exclusive
 		false, // noLocal

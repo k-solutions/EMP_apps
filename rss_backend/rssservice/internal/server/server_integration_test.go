@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +135,80 @@ func TestIntegrationRoundTrip(t *testing.T) {
 		t.Fatalf("failed to declare topology: %v", err)
 	}
 
+	// Declare and bind command sniff queue for JSON schema contract verification
+	cmdSniffQueue := "int_commands_test_sniff"
+	_, err = ch.QueueDeclare(
+		cmdSniffQueue,
+		false, // durable
+		true,  // auto-delete
+		true,  // exclusive
+		false, // no-wait
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to declare command sniff queue: %v", err)
+	}
+	err = ch.QueueBind(
+		cmdSniffQueue,
+		cfg.RabbitMQ.RoutingKeys.CommandsWorker,
+		cfg.RabbitMQ.Exchanges.Commands,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to bind command sniff queue: %v", err)
+	}
+
+	// Declare and bind result sniff queue for JSON schema contract verification
+	resultSniffQueue := "int_results_test_sniff"
+	_, err = ch.QueueDeclare(
+		resultSniffQueue,
+		false, // durable
+		true,  // auto-delete
+		true,  // exclusive
+		false, // no-wait
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to declare result sniff queue: %v", err)
+	}
+	err = ch.QueueBind(
+		resultSniffQueue,
+		cfg.RabbitMQ.RoutingKeys.ResultsRails,
+		cfg.RabbitMQ.Exchanges.Results,
+		false,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to bind result sniff queue: %v", err)
+	}
+
+	cmdDeliveries, err := ch.Consume(
+		cmdSniffQueue,
+		"cmd-sniffer",
+		true,  // auto-ack
+		true,  // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to consume command sniff queue: %v", err)
+	}
+
+	resultDeliveries, err := ch.Consume(
+		resultSniffQueue,
+		"result-sniffer",
+		true,  // auto-ack
+		true,  // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to consume result sniff queue: %v", err)
+	}
+
 	publisher := rabbitmq.NewPublisher(client, cfg)
 	consumer := rabbitmq.NewConsumer(client, cfg, logger)
 	processor := worker.NewProcessor(reader, store, rdb, urlCache, publisher, logger)
@@ -208,6 +284,30 @@ func TestIntegrationRoundTrip(t *testing.T) {
 	if len(cachedItems) != 1 || cachedItems[0].Title != "Integration Test Post" {
 		t.Errorf("expected cached item to match, got: %+v", cachedItems)
 	}
+
+	// 4. Sniff and validate the RabbitMQ JSON payloads against standard Async API specifications
+	var capturedCmdBytes []byte
+	select {
+	case d := <-cmdDeliveries:
+		capturedCmdBytes = d.Body
+	case <-time.After(5 * time.Second):
+		t.Error("timed out waiting for command message to be sniffed")
+	}
+
+	var capturedResultBytes []byte
+	select {
+	case d := <-resultDeliveries:
+		capturedResultBytes = d.Body
+	case <-time.After(5 * time.Second):
+		t.Error("timed out waiting for result message to be sniffed")
+	}
+
+	if len(capturedCmdBytes) > 0 {
+		validateCommandSchema(t, capturedCmdBytes)
+	}
+	if len(capturedResultBytes) > 0 {
+		validateResultSchema(t, capturedResultBytes)
+	}
 }
 
 func TestIntegrationFallbackRoundTrip(t *testing.T) {
@@ -281,5 +381,170 @@ func TestIntegrationFallbackRoundTrip(t *testing.T) {
 	}
 	if storedJob.Status != "done" || len(storedJob.Items) != 1 {
 		t.Errorf("stored job details mismatched: %+v", storedJob)
+	}
+}
+
+func validateCommandSchema(t *testing.T, data []byte) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Command payload is not valid JSON: %v", err)
+	}
+
+	// Required fields: job_id, urls
+	jobIDVal, exists := raw["job_id"]
+	if !exists {
+		t.Error("Command payload missing required field 'job_id'")
+	}
+	jobID, ok := jobIDVal.(string)
+	if !ok {
+		t.Errorf("Command 'job_id' is not a string, got %T", jobIDVal)
+	} else {
+		// Verify ULID regex: ^[0-9A-HJKMNP-TV-Z]{26}$
+		matched, err := regexp.MatchString("^[0-9A-HJKMNP-TV-Z]{26}$", jobID)
+		if err != nil {
+			t.Fatalf("regex error: %v", err)
+		}
+		if !matched {
+			t.Errorf("Command 'job_id' %q does not match ULID pattern", jobID)
+		}
+	}
+
+	urlsVal, exists := raw["urls"]
+	if !exists {
+		t.Error("Command payload missing required field 'urls'")
+	}
+	urls, ok := urlsVal.([]interface{})
+	if !ok {
+		t.Errorf("Command 'urls' is not an array, got %T", urlsVal)
+	} else {
+		if len(urls) < 1 {
+			t.Error("Command 'urls' must contain at least 1 item")
+		}
+		for i, uVal := range urls {
+			u, ok := uVal.(string)
+			if !ok {
+				t.Errorf("Command 'urls[%d]' is not a string, got %T", i, uVal)
+			} else {
+				if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+					t.Errorf("Command 'urls[%d]' value %q is not a valid HTTP/HTTPS URI", i, u)
+				}
+			}
+		}
+	}
+}
+
+func validateResultSchema(t *testing.T, data []byte) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Result payload is not valid JSON: %v", err)
+	}
+
+	// Required fields: job_id, status
+	jobIDVal, exists := raw["job_id"]
+	if !exists {
+		t.Error("Result payload missing required field 'job_id'")
+	}
+	jobID, ok := jobIDVal.(string)
+	if !ok {
+		t.Errorf("Result 'job_id' is not a string, got %T", jobIDVal)
+	} else {
+		matched, _ := regexp.MatchString("^[0-9A-HJKMNP-TV-Z]{26}$", jobID)
+		if !matched {
+			t.Errorf("Result 'job_id' %q does not match ULID pattern", jobID)
+		}
+	}
+
+	statusVal, exists := raw["status"]
+	if !exists {
+		t.Error("Result payload missing required field 'status'")
+	}
+	status, ok := statusVal.(string)
+	if !ok {
+		t.Errorf("Result 'status' is not a string, got %T", statusVal)
+	} else {
+		if status != "done" && status != "failed" {
+			t.Errorf("Result 'status' %q must be either 'done' or 'failed'", status)
+		}
+	}
+
+	// Optional fields: items, errors
+	if itemsVal, exists := raw["items"]; exists {
+		if itemsVal != nil {
+			items, ok := itemsVal.([]interface{})
+			if !ok {
+				t.Errorf("Result 'items' is not an array, got %T", itemsVal)
+			} else {
+				for i, itemVal := range items {
+					item, ok := itemVal.(map[string]interface{})
+					if !ok {
+						t.Errorf("Result 'items[%d]' is not an object, got %T", i, itemVal)
+						continue
+					}
+					// Required fields: title, source, source_url, link, publish_date
+					for _, reqField := range []string{"title", "source", "source_url", "link", "publish_date"} {
+						if _, exists := item[reqField]; !exists {
+							t.Errorf("Result 'items[%d]' missing required field %q", i, reqField)
+						}
+					}
+					if val, exists := item["source_url"]; exists {
+						s, ok := val.(string)
+						if !ok || (!strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://")) {
+							t.Errorf("Result 'items[%d].source_url' must be a valid URI, got %v", i, val)
+						}
+					}
+					if val, exists := item["link"]; exists {
+						s, ok := val.(string)
+						if !ok || (!strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://")) {
+							t.Errorf("Result 'items[%d].link' must be a valid URI, got %v", i, val)
+						}
+					}
+					if val, exists := item["publish_date"]; exists {
+						s, ok := val.(string)
+						if !ok {
+							t.Errorf("Result 'items[%d].publish_date' must be a string, got %T", i, val)
+						} else {
+							matched, _ := regexp.MatchString(`^\d{4}-\d{2}-\d{2}$`, s)
+							if !matched {
+								t.Errorf("Result 'items[%d].publish_date' %q does not match YYYY-MM-DD pattern", i, s)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if errorsVal, exists := raw["errors"]; exists {
+		if errorsVal != nil {
+			errors, ok := errorsVal.([]interface{})
+			if !ok {
+				t.Errorf("Result 'errors' is not an array, got %T", errorsVal)
+			} else {
+				for i, errVal := range errors {
+					errItem, ok := errVal.(map[string]interface{})
+					if !ok {
+						t.Errorf("Result 'errors[%d]' is not an object, got %T", i, errVal)
+						continue
+					}
+					// Required fields: url, error
+					for _, reqField := range []string{"url", "error"} {
+						if _, exists := errItem[reqField]; !exists {
+							t.Errorf("Result 'errors[%d]' missing required field %q", i, reqField)
+						}
+					}
+					if val, exists := errItem["url"]; exists {
+						s, ok := val.(string)
+						if !ok || (!strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://")) {
+							t.Errorf("Result 'errors[%d].url' must be a valid URI, got %v", i, val)
+						}
+					}
+					if val, exists := errItem["error"]; exists {
+						if _, ok := val.(string); !ok {
+							t.Errorf("Result 'errors[%d].error' must be a string, got %T", i, val)
+						}
+					}
+				}
+			}
+		}
 	}
 }
