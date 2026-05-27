@@ -1,0 +1,7 @@
+alice:
+  email: alice@example.com
+  encrypted_password: <%= BCrypt::Password.create("password") %>
+
+bob:
+  email: bob@example.com
+  encrypted_password: <%= BCrypt::Password.create("password") %>

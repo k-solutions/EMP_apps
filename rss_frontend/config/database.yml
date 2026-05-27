@@ -1,0 +1,18 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  username: postgres
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: rss_frontend_development
+
+test:
+  <<: *default
+  database: rss_frontend_test
+
+production:
+  <<: *default
+  url: <%= ENV["DATABASE_URL"] %>
+  database: rss_frontend_production

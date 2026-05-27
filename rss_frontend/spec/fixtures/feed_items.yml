@@ -1,0 +1,17 @@
+item_one:
+  feed_request: alice_done
+  title: "Breaking News"
+  source: "BBC News"
+  source_url: "https://feeds.bbci.co.uk/news/rss.xml"
+  link: "https://bbc.co.uk/news/1"
+  publish_date: "2026-05-23"
+  description: "Something happened today."
+
+item_two:
+  feed_request: alice_done
+  title: "Other Story"
+  source: "BBC News"
+  source_url: "https://feeds.bbci.co.uk/news/rss.xml"
+  link: "https://bbc.co.uk/news/2"
+  publish_date: "2026-05-22"
+  description: "Another thing happened."

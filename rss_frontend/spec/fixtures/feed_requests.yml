@@ -1,0 +1,13 @@
+alice_pending:
+  user: alice
+  job_id: "01J3KPENDING000"
+  urls: "{https://feeds.bbci.co.uk/news/rss.xml}"
+  status: pending
+
+
+alice_done:
+  user: alice
+  job_id: "01J3KDONE000000"
+  urls: "{https://feeds.bbci.co.uk/news/rss.xml}"
+  status: done
+
