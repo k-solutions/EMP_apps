@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/emarchant/rssreader"
 	"github.com/emarchant/rssservice/internal/cache"
@@ -14,7 +16,8 @@ import (
 )
 
 type ParseRequest struct {
-	URLs []string `json:"urls"`
+	URLs  []string `json:"urls"`
+	JobID string   `json:"job_id,omitempty"`
 }
 
 type ParseResponse struct {
@@ -45,7 +48,11 @@ func Parse(
 			return
 		}
 
-		jobID := ulid.Make().String()
+		jobID := req.JobID
+		if jobID == "" {
+			jobID = ulid.Make().String()
+		}
+
 		middleware.SetLogJobID(r.Context(), jobID)
 
 		// 1. Try Asynchronous Mode first if not in hard fallback
@@ -89,7 +96,9 @@ func Parse(
 
 		// Parse cache misses
 		if len(urlsToFetch) > 0 {
-			parsedItems, parseErr := reader.Parse(r.Context(), urlsToFetch)
+			parseCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+			defer cancel()
+			parsedItems, parseErr := reader.Parse(parseCtx, urlsToFetch)
 
 			fetchedItemsByURL := make(map[string][]jobstore.RssItem)
 			for _, item := range parsedItems {

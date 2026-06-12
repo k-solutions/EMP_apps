@@ -2,7 +2,7 @@ require 'rails_helper'
 
 RSpec.describe RabbitmqPublisher do
   let(:routing_key) { "rss_commands_worker" }
-  let(:payload) { { job_id: "test_job", urls: ["https://example.com/rss"] }.to_json }
+  let(:payload) { { job_id: "test_job", urls: [ "https://example.com/rss" ] }.to_json }
 
   before do
     @mock_conn = instance_double(Bunny::Session)

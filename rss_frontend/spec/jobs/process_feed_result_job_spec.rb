@@ -51,10 +51,12 @@ RSpec.describe ProcessFeedResultJob, type: :job do
         res = worker.work(payload)
         expect(res).to eq(:ack)
       }.to change(FeedItem, :count).by(1)
+        .and change(Feed, :count).by(1)
 
       feed_request.reload
       expect(feed_request.status).to eq("done")
       expect(FeedItem.last.title).to eq("Parsed News")
+      expect(feed_request.feeds.first.url).to eq("https://feeds.bbci.co.uk/news/rss.xml")
     end
 
     it "acks and ignores if job_id is unknown" do

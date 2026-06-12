@@ -11,6 +11,7 @@ gem "bootsnap", require: false
 gem "devise"
 gem "bcrypt", "~> 3.1.7"
 gem "jwt"
+gem "ulid"
 
 # Views
 gem "slim-rails"

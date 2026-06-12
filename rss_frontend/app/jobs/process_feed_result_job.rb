@@ -22,7 +22,7 @@ class ProcessFeedResultJob
     return :ack if request.status == "done" || request.status == "failed"
 
     # Optimistic lock — prevents duplicate processing
-    updated = FeedRequest.where(job_id: job_id, status: ["pending", "processing"])
+    updated = FeedRequest.where(job_id: job_id, status: [ "pending", "processing" ])
                          .update_all(status: data["status"])
     return :ack if updated == 0
 
@@ -30,21 +30,30 @@ class ProcessFeedResultJob
     errors = data["errors"] || []
 
     if items.any?
-      feed_items_data = items.map do |item|
-        pub_date = item["publish_date"] || item["Date"]
-        {
-          feed_request_id: request.id,
-          title:           item["title"],
-          source:          item["source"],
-          source_url:      item["source_url"],
-          link:            item["link"],
-          publish_date:    pub_date,
-          description:     item["description"],
-          created_at:      Time.current,
-          updated_at:      Time.current
-        }
+      items.group_by { |item| item["source_url"] }.each do |url, feed_items|
+        source_name = feed_items.first["source"] || "RSS Source"
+        feed = Feed.find_or_create_by!(url: url) do |f|
+          f.title = source_name
+        end
+
+        request.feeds << feed unless request.feeds.include?(feed)
+
+        feed_items_data = feed_items.map do |item|
+          pub_date = item["publish_date"] || item["Date"]
+          {
+            feed_id:         feed.id,
+            title:           item["title"],
+            source:          item["source"],
+            source_url:      item["source_url"],
+            link:            item["link"],
+            publish_date:    pub_date,
+            description:     item["description"],
+            created_at:      Time.current,
+            updated_at:      Time.current
+          }
+        end
+        FeedItem.insert_all(feed_items_data, unique_by: [ :feed_id, :link ])
       end
-      FeedItem.insert_all(feed_items_data)
     end
 
     ActionCable.server.broadcast("feed_#{request.user_id}", {

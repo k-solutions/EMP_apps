@@ -10,22 +10,22 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_102619) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_12_115607) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   create_table "feed_items", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
-    t.bigint "feed_request_id", null: false
+    t.bigint "feed_id", null: false
     t.string "link"
     t.date "publish_date"
     t.string "source"
     t.string "source_url"
     t.string "title"
     t.datetime "updated_at", null: false
-    t.index ["feed_request_id", "link"], name: "index_feed_items_on_feed_request_id_and_link", unique: true
-    t.index ["feed_request_id"], name: "index_feed_items_on_feed_request_id"
+    t.index ["feed_id", "link"], name: "index_feed_items_on_feed_id_and_link", unique: true
+    t.index ["feed_id"], name: "index_feed_items_on_feed_id"
   end
 
   create_table "feed_requests", force: :cascade do |t|
@@ -37,6 +37,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_102619) do
     t.bigint "user_id", null: false
     t.index ["job_id"], name: "index_feed_requests_on_job_id"
     t.index ["user_id"], name: "index_feed_requests_on_user_id"
+  end
+
+  create_table "feed_requests_feeds", id: false, force: :cascade do |t|
+    t.bigint "feed_id", null: false
+    t.bigint "feed_request_id", null: false
+    t.index ["feed_id", "feed_request_id"], name: "index_feed_requests_feeds_on_feed_id_and_feed_request_id"
+    t.index ["feed_request_id", "feed_id"], name: "index_feed_requests_feeds_on_feed_request_id_and_feed_id", unique: true
+  end
+
+  create_table "feeds", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "title"
+    t.datetime "updated_at", null: false
+    t.string "url", null: false
+    t.index ["url"], name: "index_feeds_on_url", unique: true
   end
 
   create_table "solid_queue_blocked_executions", force: :cascade do |t|
@@ -173,7 +188,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_102619) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
-  add_foreign_key "feed_items", "feed_requests"
+  add_foreign_key "feed_items", "feeds"
   add_foreign_key "feed_requests", "users"
   add_foreign_key "solid_queue_blocked_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_claimed_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade

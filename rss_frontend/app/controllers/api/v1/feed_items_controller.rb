@@ -2,8 +2,9 @@ class Api::V1::FeedItemsController < Api::BaseController
   # GET /api/v1/feed_items
   def index
     items = FeedItem
-      .joins(:feed_request)
+      .joins(feed: :feed_requests)
       .where(feed_requests: { user_id: current_user.id })
+      .distinct
       .order(publish_date: :desc)
       .map do |item|
         {

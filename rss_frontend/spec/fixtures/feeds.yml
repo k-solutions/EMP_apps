@@ -1,0 +1,3 @@
+bbc_news:
+  url: "https://feeds.bbci.co.uk/news/rss.xml"
+  title: "BBC News"

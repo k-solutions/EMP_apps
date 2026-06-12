@@ -1,5 +1,5 @@
 item_one:
-  feed_request: alice_done
+  feed: bbc_news
   title: "Breaking News"
   source: "BBC News"
   source_url: "https://feeds.bbci.co.uk/news/rss.xml"
@@ -8,7 +8,7 @@ item_one:
   description: "Something happened today."
 
 item_two:
-  feed_request: alice_done
+  feed: bbc_news
   title: "Other Story"
   source: "BBC News"
   source_url: "https://feeds.bbci.co.uk/news/rss.xml"

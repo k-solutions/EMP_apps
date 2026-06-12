@@ -1,7 +1,12 @@
 class JwtService
   def self.generate_token(user_id:)
+    user = User.find(user_id)
+    jti = SecureRandom.uuid
+    user.update!(jwt_jti: jti)
+
     payload = {
       sub: user_id,
+      jti: jti,
       exp: (Time.current + 5.minutes).to_i
     }
     # Read ES256 EC Private Key (matching backend ec_public.pem pair)

@@ -29,37 +29,45 @@ class PublishFeedJob < ApplicationJob
     req = Net::HTTP::Post.new(uri)
     req["Authorization"] = "Bearer #{token}"
     req["Content-Type"] = "application/json"
-    req.body = { urls: feed_request.urls }.to_json
+    req.body = { urls: feed_request.urls, job_id: feed_request.job_id }.to_json
 
-    res = Net::HTTP.start(uri.hostname, uri.port) do |http|
+    res = Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 10) do |http|
       http.request(req)
     end
 
     if res.code == "200"
       data = JSON.parse(res.body)
-      
-      # Since Go service returns a new job_id in /parse, we update the request to match
+
       feed_request.update!(job_id: data["job_id"], status: data["status"])
 
       items = data["items"] || []
       errors = data["errors"] || []
 
       if items.any?
-        feed_items_data = items.map do |item|
-          pub_date = item["publish_date"] || item["Date"]
-          {
-            feed_request_id: feed_request.id,
-            title:           item["title"],
-            source:          item["source"],
-            source_url:      item["source_url"],
-            link:            item["link"],
-            publish_date:    pub_date,
-            description:     item["description"],
-            created_at:      Time.current,
-            updated_at:      Time.current
-          }
+        items.group_by { |item| item["source_url"] }.each do |url, feed_items|
+          source_name = feed_items.first["source"] || "RSS Source"
+          feed = Feed.find_or_create_by!(url: url) do |f|
+            f.title = source_name
+          end
+
+          feed_request.feeds << feed unless feed_request.feeds.include?(feed)
+
+          feed_items_data = feed_items.map do |item|
+            pub_date = item["publish_date"] || item["Date"]
+            {
+              feed_id:         feed.id,
+              title:           item["title"],
+              source:          item["source"],
+              source_url:      item["source_url"],
+              link:            item["link"],
+              publish_date:    pub_date,
+              description:     item["description"],
+              created_at:      Time.current,
+              updated_at:      Time.current
+            }
+          end
+          FeedItem.insert_all(feed_items_data, unique_by: [ :feed_id, :link ])
         end
-        FeedItem.insert_all(feed_items_data)
       end
 
       ActionCable.server.broadcast("feed_#{feed_request.user_id}", {
@@ -78,7 +86,7 @@ class PublishFeedJob < ApplicationJob
       feed_request_id: feed_request.id,
       status:          "failed",
       items:           [],
-      errors:          [e.message]
+      errors:          [ e.message ]
     })
   end
 end

@@ -29,7 +29,7 @@ if system("which google-chrome > /dev/null 2>&1 || which chromium > /dev/null 2>
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    
+
     driver = Selenium::WebDriver.for :chrome, options: options
     driver.quit
     chrome_launchable = true

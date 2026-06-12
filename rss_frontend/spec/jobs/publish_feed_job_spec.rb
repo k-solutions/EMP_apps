@@ -7,7 +7,7 @@ RSpec.describe PublishFeedJob, type: :job do
     FeedRequest.create!(
       user: users(:alice),
       job_id: "01J3KPENDING0000000000000",
-      urls: ["https://feeds.bbci.co.uk/news/rss.xml"],
+      urls: [ "https://feeds.bbci.co.uk/news/rss.xml" ],
       status: "pending"
     )
   end
@@ -28,7 +28,7 @@ RSpec.describe PublishFeedJob, type: :job do
 
         # Programmatic contract assertion against config/asyncapi.yaml
         expect(captured_payload).to comply_with_asyncapi_spec(:CommandMessage)
-        
+
         feed_request.reload
         expect(feed_request.status).to eq("processing")
       end
@@ -56,7 +56,7 @@ RSpec.describe PublishFeedJob, type: :job do
       before do
         # Force publisher initialization to raise an error
         allow(RabbitmqPublisher).to receive(:new).and_raise(StandardError.new("RabbitMQ connection refused"))
-        
+
         # Stub JWT generation
         allow(JwtService).to receive(:generate_token).and_return("mocked_jwt_token")
       end
@@ -65,7 +65,7 @@ RSpec.describe PublishFeedJob, type: :job do
         # Stub HTTP request
         stub_request(:post, "http://localhost:8080/parse")
           .with(
-            body: { urls: feed_request.urls }.to_json,
+            body: { urls: feed_request.urls, job_id: feed_request.job_id }.to_json,
             headers: {
               'Authorization' => 'Bearer mocked_jwt_token',
               'Content-Type' => 'application/json'
@@ -81,10 +81,12 @@ RSpec.describe PublishFeedJob, type: :job do
         expect {
           PublishFeedJob.new.perform(feed_request)
         }.to change(FeedItem, :count).by(1)
+          .and change(Feed, :count).by(1)
 
         feed_request.reload
         expect(feed_request.job_id).to eq("NEW_JOB_ID_123")
         expect(feed_request.status).to eq("done")
+        expect(feed_request.feeds.first.url).to eq("https://feeds.bbci.co.uk/news/rss.xml")
       end
 
       it "marks the request as failed when Go service fails" do

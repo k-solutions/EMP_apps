@@ -14,20 +14,20 @@ RSpec.describe "POST /api/v1/feeds", type: :request do
     it "returns 202 with job_id and status pending, enqueuing PublishFeedJob" do
       expect {
         post "/api/v1/feeds",
-          params: { urls: ["https://feeds.bbci.co.uk/news/rss.xml"] }.to_json,
+          params: { urls: [ "https://feeds.bbci.co.uk/news/rss.xml" ] }.to_json,
           headers: headers
       }.to have_enqueued_job(PublishFeedJob)
 
       expect(response).to have_http_status(:accepted)
       expect(json["status"]).to eq("pending")
-      expect(json["job_id"]).to be_present
+      expect(json["job_id"]).to match(/\A[0-9A-HJKMNP-TV-Z]{26}\z/)
       expect(json["mode"]).to eq("full")
     end
 
     it "creates a FeedRequest record with status pending" do
       expect {
         post "/api/v1/feeds",
-          params: { urls: ["https://example.com/rss"] }.to_json,
+          params: { urls: [ "https://example.com/rss" ] }.to_json,
           headers: headers
       }.to change(FeedRequest, :count).by(1)
 
@@ -54,7 +54,7 @@ RSpec.describe "POST /api/v1/feeds", type: :request do
   context "when unauthenticated" do
     it "returns 401" do
       post "/api/v1/feeds",
-        params: { urls: ["https://example.com/rss"] }.to_json,
+        params: { urls: [ "https://example.com/rss" ] }.to_json,
         headers: headers
 
       expect(response).to have_http_status(:unauthorized)

@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe "GET /api/v1/feed_items", type: :request do
-  fixtures :users, :feed_requests, :feed_items
+  fixtures :users, :feed_requests, :feeds, :feed_requests_feeds, :feed_items
 
   let(:json) { JSON.parse(response.body) }
 

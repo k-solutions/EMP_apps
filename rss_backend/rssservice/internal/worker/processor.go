@@ -74,7 +74,9 @@ func (p *Processor) Process(ctx context.Context, jobID string, urls []string) er
 
 	// If there are missed URLs, fetch them
 	if len(urlsToFetch) > 0 {
-		parsedItems, parseErr := p.reader.Parse(ctx, urlsToFetch)
+		parseCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		parsedItems, parseErr := p.reader.Parse(parseCtx, urlsToFetch)
 
 		// Group parsed items by their SourceURL for atomic cache hydration
 		fetchedItemsByURL := make(map[string][]jobstore.RssItem)

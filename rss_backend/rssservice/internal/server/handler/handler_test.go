@@ -134,3 +134,41 @@ func TestJobsHandler(t *testing.T) {
 		t.Errorf("expected 404, got %d", w2.Code)
 	}
 }
+
+func TestParseHandlerCustomJobID(t *testing.T) {
+	reader := &mockRssReader{items: []rssreader.RssItem{}, err: nil}
+	store := jobstore.NewInMemoryJobStore()
+
+	handler := Parse(reader, store, nil, nil, true)
+
+	// Custom Job ID Request
+	customJobID := "01J3KPENDING0000000000000"
+	reqBody := `{"urls": ["https://example.com/feed"], "job_id": "` + customJobID + `"}`
+	req := httptest.NewRequest("POST", "/parse", strings.NewReader(reqBody))
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var resp FallbackResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+
+	if resp.JobID != customJobID {
+		t.Errorf("expected job_id %s, got %s", customJobID, resp.JobID)
+	}
+
+	// Verify job was stored with the custom Job ID
+	job, err := store.Get(context.Background(), customJobID)
+	if err != nil {
+		t.Fatalf("expected job to be saved in store with custom ID: %v", err)
+	}
+	if job.ID != customJobID {
+		t.Errorf("expected job ID %s, got %s", customJobID, job.ID)
+	}
+}
+

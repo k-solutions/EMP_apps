@@ -7,7 +7,7 @@ class Api::V1::FeedsController < Api::BaseController
       return render json: { error: "Urls parameter must be a non-empty array" }, status: :unprocessable_entity
     end
 
-    job_id = SecureRandom.alphanumeric(26).upcase
+    job_id = ULID.generate
 
     feed_request = current_user.feed_requests.create!(
       job_id: job_id,

@@ -1,4 +1,4 @@
-require 'sneakers'
+require "sneakers"
 
 Sneakers.configure(
   amqp: ENV.fetch("RABBITMQ_URL", "amqp://guest:guest@localhost:5672"),

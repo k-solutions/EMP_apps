@@ -3,7 +3,8 @@ require 'rails_helper'
 RSpec.describe FeedRequest, type: :model do
   describe 'associations' do
     it { should belong_to(:user) }
-    it { should have_many(:feed_items).dependent(:destroy) }
+    it { should have_and_belong_to_many(:feeds) }
+    it { should have_many(:feed_items).through(:feeds) }
   end
 
   describe 'validations' do

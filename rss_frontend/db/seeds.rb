@@ -15,7 +15,7 @@ end
 feed_request = FeedRequest.find_or_create_by!(
   user: user,
   job_id: "01KSFT7Y2VGH5SXRKNBJ03JK5N",
-  urls: ["https://feeds.bbci.co.uk/news/rss.xml"]
+  urls: [ "https://feeds.bbci.co.uk/news/rss.xml" ]
 ) do |req|
   req.status = "done"
 end

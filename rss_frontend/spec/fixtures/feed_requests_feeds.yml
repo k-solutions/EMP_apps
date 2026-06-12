@@ -1,0 +1,3 @@
+alice_done_bbc:
+  feed_request_id: <%= ActiveRecord::FixtureSet.identify(:alice_done) %>
+  feed_id: <%= ActiveRecord::FixtureSet.identify(:bbc_news) %>

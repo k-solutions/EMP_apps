@@ -1,7 +1,7 @@
 require 'rails_helper'
 
 RSpec.describe "Feed items display", type: :feature, js: true do
-  fixtures :users, :feed_requests, :feed_items
+  fixtures :users, :feed_requests, :feeds, :feed_requests_feeds, :feed_items
 
   before { sign_in_as users(:alice) }
 
